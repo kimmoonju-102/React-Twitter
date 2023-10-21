@@ -1,7 +1,8 @@
-import styled from "styled-components";
+import { addDoc, collection, updateDoc } from "firebase/firestore";
 import { useState } from "react";
-import { auth, db } from "../firebase";
-import { addDoc, collection } from "firebase/firestore";
+import { styled } from "styled-components";
+import { auth, db, storage } from "../firebase";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 
 export default function PostTweetForm() {
   const [isLoading, setLoading] = useState(false);
@@ -24,12 +25,22 @@ export default function PostTweetForm() {
     if (!user || isLoading || tweet === "" || tweet.length > 180) return;
     try {
       setLoading(true);
-      await addDoc(collection(db, "tweets"), {
+      const doc = await addDoc(collection(db, "tweets"), {
         tweet,
-        createAt: Date.now(),
+        createdAt: Date.now(),
         username: user.displayName || "Anonymous",
         userId: user.uid,
       });
+      if (file) {
+        const locationRef = ref(storage, `tweets/${user.uid}/${doc.id}`);
+        const result = await uploadBytes(locationRef, file);
+        const url = await getDownloadURL(result.ref);
+        await updateDoc(doc, {
+          photo: url,
+        });
+      }
+      setTweet("");
+      setFile(null);
     } catch (e) {
       console.log(e);
     } finally {
@@ -38,9 +49,9 @@ export default function PostTweetForm() {
   };
   return (
     <Form onSubmit={onSubmit}>
-      <TextArea rows={5} maxLength={180} onChange={onChange} value={tweet} placeholder="What is happening?" />
-      <AttachFileButton htmlFor="file">{file ? "Photo added✅" : "Add photo"} </AttachFileButton>
-      <AttachTileInput onChange={onFileChange} type="file" id="fill" accept="image/*" />
+      <TextArea required rows={5} maxLength={180} onChange={onChange} value={tweet} placeholder="What is happening?!" />
+      <AttachFileButton htmlFor="file">{file ? "Photo added ✅" : "Add photo"}</AttachFileButton>
+      <AttachFileInput onChange={onFileChange} type="file" id="file" accept="image/*" />
       <SubmitBtn type="submit" value={isLoading ? "Posting..." : "Post Tweet"} />
     </Form>
   );
@@ -51,6 +62,7 @@ const Form = styled.form`
   flex-direction: column;
   gap: 10px;
 `;
+
 const TextArea = styled.textarea`
   border: 2px solid white;
   padding: 20px;
@@ -60,15 +72,16 @@ const TextArea = styled.textarea`
   background-color: black;
   width: 100%;
   resize: none;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
   &::placeholder {
     font-size: 16px;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
   }
   &:focus {
     outline: none;
     border-color: #1d9bf0;
   }
 `;
+
 const AttachFileButton = styled.label`
   padding: 10px 0px;
   color: #1d9bf0;
@@ -79,14 +92,16 @@ const AttachFileButton = styled.label`
   font-weight: 600;
   cursor: pointer;
 `;
-const AttachTileInput = styled.input`
+
+const AttachFileInput = styled.input`
   display: none;
 `;
+
 const SubmitBtn = styled.input`
   background-color: #1d9bf0;
   color: white;
   border: none;
-  padding: 10px 0;
+  padding: 10px 0px;
   border-radius: 20px;
   font-size: 16px;
   cursor: pointer;
